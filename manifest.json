@@ -1,0 +1,14 @@
+{
+  "name": "Daily Service Report",
+  "short_name": "DSR",
+  "description": "Submit and track daily service reports",
+  "start_url": "/login.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#0e1111",
+  "icons": [],
+  "categories": ["business", "productivity"],
+  "prefer_related_applications": false
+}

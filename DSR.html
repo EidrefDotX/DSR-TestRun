@@ -337,10 +337,10 @@
       text-transform: uppercase;
     }
     .history-modal-body { flex: 1; overflow-y: auto; overflow-x: auto; }
-    .history-modal-body::-webkit-scrollbar { width: 10px; height: 10px; }
-    .history-modal-body::-webkit-scrollbar-track { background: #ffffff; border-left: 1px solid #0e1111; }
-    .history-modal-body::-webkit-scrollbar-thumb { background: #0e1111; border-radius: 0; border: 1px solid #0e1111; }
-    .history-modal-body::-webkit-scrollbar-thumb:hover { background: #1a1a1a; }
+    .history-modal-body::-webkit-scrollbar { width: 8px; height: 8px; }
+    .history-modal-body::-webkit-scrollbar-track { background: #f5f5f5; }
+    .history-modal-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+    .history-modal-body::-webkit-scrollbar-thumb:hover { background: #999; }
     /* Outstanding Black & White Table Design */
     .history-table { 
       width: 100%; 
@@ -1098,7 +1098,10 @@
           projectCode: document.getElementById('projectCode')?.value || '',
           projectCodeCustom: document.getElementById('projectCodeCustom')?.value || '',
           projectCodeCustomVisible: document.getElementById('projectCodeCustom')?.style.display !== 'none',
-          projectName: document.getElementById('projectName')?.value || '',
+          projectName: document.getElementById('projectNameSelect')?.style.display !== 'none' 
+            ? (document.getElementById('projectNameSelect')?.value || '') 
+            : (document.getElementById('projectName')?.value || ''),
+          projectNameCustomVisible: document.getElementById('projectName')?.style.display !== 'none',
           clientName: document.getElementById('clientName')?.value || '',
           plantLocation: document.getElementById('plantLocation')?.value || '',
           travelTimeToSite: document.getElementById('travelTimeToSite')?.value || '',
@@ -1222,7 +1225,24 @@
           document.getElementById('projectCodeCustom').style.display = 'block';
           document.getElementById('projectCode').style.display = 'none';
         }
-        if (formData.projectName) document.getElementById('projectName').value = formData.projectName;
+        if (formData.projectName) {
+          document.getElementById('projectName').value = formData.projectName;
+          // Also try to set the project name dropdown
+          const projectNameSelect = document.getElementById('projectNameSelect');
+          if (projectNameSelect) {
+            // Check if the value exists in the dropdown
+            const optionExists = Array.from(projectNameSelect.options).some(opt => opt.value === formData.projectName);
+            if (optionExists) {
+              projectNameSelect.value = formData.projectName;
+              projectNameSelect.style.display = 'block';
+              document.getElementById('projectName').style.display = 'none';
+            } else {
+              // Custom value - show the input
+              projectNameSelect.style.display = 'none';
+              document.getElementById('projectName').style.display = 'block';
+            }
+          }
+        }
         if (formData.clientName) document.getElementById('clientName').value = formData.clientName;
         if (formData.plantLocation) document.getElementById('plantLocation').value = formData.plantLocation;
         // Convert 12-hour format to 24-hour format for time inputs
@@ -1764,15 +1784,19 @@
       const getFieldValueOrSelect = (inputId, selectId) => {
         const inputEl = document.getElementById(inputId);
         const selectEl = document.getElementById(selectId);
-        // If select is visible and has a valid value (not empty, not placeholder), use it
-        if (selectEl && selectEl.style.display !== 'none' && selectEl.value && selectEl.value.trim() !== '') {
+        // If select is visible and has a valid value (not empty, not placeholder, not __other__), use it
+        if (selectEl && selectEl.style.display !== 'none' && selectEl.value && selectEl.value.trim() !== '' && selectEl.value !== '__other__') {
           // Check if it's a placeholder option (disabled or empty value)
           const selectedOption = selectEl.options[selectEl.selectedIndex];
-          if (selectedOption && !selectedOption.disabled && selectedOption.value !== '') {
+          if (selectedOption && !selectedOption.disabled && selectedOption.value !== '' && selectedOption.value !== '__other__') {
             return selectEl.value.trim();
           }
         }
-        // Otherwise use input if it exists and has value
+        // Otherwise use input if it exists, is visible, and has value
+        if (inputEl && inputEl.style.display !== 'none' && inputEl.value && inputEl.value.trim() !== '') {
+          return inputEl.value.trim();
+        }
+        // Fallback: check input even if hidden (for backward compatibility)
         if (inputEl && inputEl.value && inputEl.value.trim() !== '') {
           return inputEl.value.trim();
         }
@@ -2184,12 +2208,7 @@
             // Clear existing options except the first placeholder
             projectCodeSelect.innerHTML = '<option value="" selected>Select Project Code</option>';
             
-            // Add "None" and "Site Inspection" options
-            const noneOption = document.createElement('option');
-            noneOption.value = 'None';
-            noneOption.textContent = 'None';
-            projectCodeSelect.appendChild(noneOption);
-            
+            // Add "Site Inspection" option
             const siteInspectionOption = document.createElement('option');
             siteInspectionOption.value = 'Site Inspection';
             siteInspectionOption.textContent = 'Site Inspection';
@@ -2202,6 +2221,38 @@
               option.textContent = code;
               projectCodeSelect.appendChild(option);
             });
+            
+            // Add "Other" option for custom input
+            const otherOption = document.createElement('option');
+            otherOption.value = '__other__';
+            otherOption.textContent = 'Other (Enter Custom)';
+            projectCodeSelect.appendChild(otherOption);
+          }
+          
+          // Populate project name dropdown
+          const projectNameSelect = document.getElementById('projectNameSelect');
+          if (projectNameSelect) {
+            projectNameSelect.innerHTML = '<option value="" selected>Select Project Name</option>';
+            
+            // Get unique project names sorted alphabetically, filtering out invalid entries
+            const invalidNames = ['unknown', 'none', 'n/a', ''];
+            const uniqueNames = [...new Set(Object.values(projectCodeInfo)
+              .map(v => v.projectName)
+              .filter(n => n && !invalidNames.includes(n.toLowerCase().trim()))
+            )].sort();
+            
+            uniqueNames.forEach(name => {
+              const option = document.createElement('option');
+              option.value = name;
+              option.textContent = name;
+              projectNameSelect.appendChild(option);
+            });
+            
+            // Add "Other" option for custom input
+            const otherNameOption = document.createElement('option');
+            otherNameOption.value = '__other__';
+            otherNameOption.textContent = 'Other (Enter Custom)';
+            projectNameSelect.appendChild(otherNameOption);
           }
           
           console.log(`Loaded ${projects.length} projects from API`);
@@ -2235,14 +2286,14 @@
         if (!projectCodeSelect || !projectNameInput || !clientNameInput || !plantLocationInput) return;
         const code = (projectCodeSelect.value || '').trim();
         
-        if (code === 'None') {
+        if (!code || code === '') {
           // clear anchor and re-enable phase control
           isAnchoredByProjectCode = false;
           if (projectPhaseSelect) projectPhaseSelect.disabled = false;
-          // When "None" is selected, keep dropdown visible with "None"
+          // When empty is selected, keep dropdown visible
           if (projectCodeSelect) {
             projectCodeSelect.style.display = 'block';
-            projectCodeSelect.value = 'None';
+            projectCodeSelect.value = '';
           }
           // Hide custom input
           if (projectCodeCustom) {
@@ -2298,6 +2349,17 @@
           if (!this.value.trim()) {
             projectCodeSelect.style.display = 'block';
             projectCodeSelect.value = '';
+            this.style.display = 'none';
+          }
+        });
+      }
+      
+      // Allow switching back to dropdown from custom project name input
+      if (projectNameInput) {
+        projectNameInput.addEventListener('blur', function() {
+          if (!this.value.trim()) {
+            projectNameSelect.style.display = 'block';
+            projectNameSelect.value = '';
             this.style.display = 'none';
           }
         });
@@ -2364,7 +2426,7 @@
           projectPhaseCustom.focus();
           
           // Check if project code is already selected (either via dropdown or custom input)
-          const hasProjectCodeSelect = projectCodeSelect && projectCodeSelect.value && projectCodeSelect.value.trim() !== '' && projectCodeSelect.value !== 'None' && projectCodeSelect.value !== 'Site Inspection';
+          const hasProjectCodeSelect = projectCodeSelect && projectCodeSelect.value && projectCodeSelect.value.trim() !== '' && projectCodeSelect.value !== 'Site Inspection';
           const hasProjectCodeCustom = projectCodeCustom && projectCodeCustom.value && projectCodeCustom.value.trim() !== '';
           const hasProjectCode = hasProjectCodeSelect || hasProjectCodeCustom;
           
@@ -2389,18 +2451,42 @@
       // Dropdown handlers - sync to hidden input and auto-fill related fields
       if (projectNameSelect) {
         projectNameSelect.addEventListener('change', () => {
-          syncSelectToInput(projectNameSelect, projectNameInput);
-          // Auto-fill client name and plant location when project name is selected (but not project code)
           const selectedProjectName = projectNameSelect.value;
+          
+          // Handle "Other" option - show custom input for typing
+          if (selectedProjectName === '__other__') {
+            if (projectNameInput) {
+              projectNameSelect.style.display = 'none';
+              projectNameInput.style.display = 'block';
+              projectNameInput.value = '';
+              projectNameInput.focus();
+            }
+            return;
+          }
+          
+          syncSelectToInput(projectNameSelect, projectNameInput);
+          // Auto-fill project code, client name and plant location when project name is selected
           
           if (!selectedProjectName || selectedProjectName === 'Select Project Name') {
             // Re-enable dropdowns if project name is cleared
             if (clientNameSelect) clientNameSelect.disabled = false;
             if (plantLocationSelect) plantLocationSelect.disabled = false;
+            // Clear project code selection
+            if (projectCodeSelect) projectCodeSelect.value = '';
           } else {
             const entries = Object.entries(projectCodeInfo);
+            let foundMatch = false;
             for (const [code, info] of entries) {
               if (String(info.projectName || '').trim() === String(selectedProjectName || '').trim()) {
+                foundMatch = true;
+                // Update project code dropdown to match
+                if (projectCodeSelect) {
+                  projectCodeSelect.value = code;
+                  projectCodeSelect.style.display = 'block';
+                }
+                if (projectCodeCustom) {
+                  projectCodeCustom.style.display = 'none';
+                }
                 // Update both inputs and selects with matching data
                 if (clientNameInput) clientNameInput.value = info.clientName || '';
                 if (plantLocationInput) plantLocationInput.value = info.plantLocation || '';
@@ -2414,6 +2500,19 @@
                 }
                 break;
               }
+            }
+            // If no matching project code found, clear selection
+            if (!foundMatch) {
+              if (projectCodeSelect) {
+                projectCodeSelect.value = '';
+                projectCodeSelect.style.display = 'block';
+              }
+              if (projectCodeCustom) {
+                projectCodeCustom.style.display = 'none';
+              }
+              // Re-enable client and location dropdowns for manual entry
+              if (clientNameSelect) clientNameSelect.disabled = false;
+              if (plantLocationSelect) plantLocationSelect.disabled = false;
             }
           }
         });
@@ -2462,17 +2561,31 @@
           // Get project code custom input element
           const projectCodeCustom = document.getElementById('projectCodeCustom');
           
-          // When "None" is selected, ensure dropdown is visible with "None"
-          if (code === 'None') {
-            // Ensure dropdown is visible and "None" is selected
+          // Handle "Other" option - show custom input for typing
+          if (code === '__other__') {
+            if (projectCodeCustom) {
+              projectCodeSelect.style.display = 'none';
+              projectCodeCustom.style.display = 'block';
+              projectCodeCustom.value = '';
+              projectCodeCustom.focus();
+            }
+            return;
+          }
+          
+          // When empty/placeholder is selected, ensure dropdown is visible
+          if (!code || code === '') {
+            // Ensure dropdown is visible
             if (projectCodeSelect) {
               projectCodeSelect.style.display = 'block';
-              projectCodeSelect.value = 'None';
+              projectCodeSelect.value = '';
             }
             // Hide custom input if it exists
             if (projectCodeCustom) {
               projectCodeCustom.style.display = 'none';
             }
+            // Clear project name selection
+            if (projectNameSelect) projectNameSelect.value = '';
+            if (projectNameInput) projectNameInput.value = '';
           }
           
           if (code === 'Site Inspection') {
@@ -2486,22 +2599,31 @@
             populateSelect(projectNameSelect, 'Select Project Name', allProjectNames);
             populateSelect(clientNameSelect, 'Select Client Name', allClientNames);
             populateSelect(plantLocationSelect, 'Select Plant Location', allPlantLocations);
+            // Add "Other" option back to project name select
+            const otherOpt = document.createElement('option');
+            otherOpt.value = '__other__';
+            otherOpt.textContent = 'Other (Enter Custom)';
+            projectNameSelect.appendChild(otherOpt);
             if (projectNameInput && projectNameInput.value) projectNameSelect.value = projectNameInput.value;
             if (clientNameInput && clientNameInput.value) clientNameSelect.value = clientNameInput.value;
             if (plantLocationInput && plantLocationInput.value) plantLocationSelect.value = plantLocationInput.value;
           } else {
-            // Normal mode: hide selects, show inputs
-            setVisible(projectNameSelect, false);
+            // Normal mode: show project name dropdown, hide custom input
+            setVisible(projectNameSelect, true);
+            setVisible(projectNameInput, false);
             setVisible(clientNameSelect, false);
             setVisible(plantLocationSelect, false);
-            setVisible(projectNameInput, true);
             setVisible(clientNameInput, true);
             setVisible(plantLocationInput, true);
-            if (code) {
+            
+            // Sync project name dropdown when a valid project code is selected
+            if (code && projectCodeInfo[code]) {
               const info = projectCodeInfo[code];
               if (info) {
+                // Update project name dropdown to match
+                if (projectNameSelect) projectNameSelect.value = info.projectName || '';
                 if (projectNameInput) projectNameInput.value = info.projectName || '';
-                if (clientNameInput) projectNameInput && (clientNameInput.value = info.clientName || '');
+                if (clientNameInput) clientNameInput.value = info.clientName || '';
                 if (plantLocationInput) plantLocationInput.value = info.plantLocation || '';
               }
             }
@@ -2696,19 +2818,7 @@
         loadDraft();
       }, DRAFT_LOAD_DELAY_MS);
 
-      // Check initial state and set project phase read-only if project code is "None"
-      if (projectCodeSelect && projectCodeSelect.value === 'None') {
-        const projectPhaseSelect = document.getElementById('projectPhase');
-        const projectPhaseCustom = document.getElementById('projectPhaseCustom');
-        if (projectPhaseSelect) {
-          projectPhaseSelect.disabled = true;
-          projectPhaseSelect.value = 'None';
-        }
-        if (projectPhaseCustom) {
-          projectPhaseCustom.disabled = true;
-          projectPhaseCustom.value = 'None';
-        }
-      }
+      // Check initial state - project phase is enabled by default now
     });
 
     // Burger menu functions
@@ -3039,11 +3149,11 @@
         
         if (!detailModal || !detailTitle || !detailBody) {
           // Fallback to alert if modal elements don't exist
-          alert(`Report #${report.id}\nDate: ${report.reportDate}\nEngineer: ${formattedEngineerName}\nProject: ${report.projectCode} - ${report.projectName}`);
+          alert(`Date: ${report.reportDate}\nEngineer: ${formattedEngineerName}\nProject: ${report.projectCode} - ${report.projectName}`);
           return;
         }
         
-        detailTitle.textContent = `Report #${report.id} — ${formattedEngineerName}`;
+        detailTitle.textContent = `${formattedEngineerName}`;
         
         // Show and configure PDF button
         const printBtn = document.getElementById('reportDetailPrintBtn');
@@ -3346,8 +3456,10 @@
           </div>
           <div>
             <label for="projectName">Project Name</label>
-            <input type="text" id="projectName" placeholder="Project Name">
-            <select id="projectNameSelect" style="display: none; margin-top: 8px;"></select>
+            <select id="projectNameSelect">
+              <option value="" selected>Select Project Name</option>
+            </select>
+            <input type="text" id="projectName" placeholder="Project Name" style="display: none; margin-top: 8px;">
           </div>
         </div>
         <div class="row">
